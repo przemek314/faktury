@@ -10,7 +10,7 @@ Ten dokument opisuje różnice między oryginalnym workflow Make.com a nową wer
 |----------------|----------|-------|
 | `email:TriggerNewEmail` | `emailReadImap` | n8n używa pollingu zamiast instant triggera |
 | `util:FunctionSleep` | `wait` | Podobna funkcjonalność |
-| `anthropic-claude:createAMessage` | `httpRequest` + custom body | n8n nie ma dedykowanego node Anthropic, używamy HTTP Request |
+| `anthropic-claude:createAMessage` | `openAi` (GPT-4o) | W tej wersji używamy OpenAI jako zamiennik (podobna dokładność) |
 | `json:ParseJSON` | `code` node | n8n używa JavaScript do parsowania |
 | `airtable:ActionSearchRecords` | `airtable` (search) | Natywna integracja |
 | `airtable:ActionCreateRecord` | `airtable` (append) | Natywna integracja |
@@ -63,41 +63,31 @@ Ten dokument opisuje różnice między oryginalnym workflow Make.com a nową wer
 ={{ $('Parse Claude Response').item.json.invoice_number }}
 ```
 
-### 4. Anthropic Claude Integration
+### 4. AI Model dla ekstrakcji danych
 
 **Make.com:**
+- Claude 3.7 Sonnet
 - Dedykowany moduł `anthropic-claude:createAMessage`
-- Obsługa PDF przez `pdfFileData` i `pdfFileName`
-- Automatyczna obsługa API versioning
+- Natywna obsługa PDF dokumentów
 
-**n8n:**
-- HTTP Request node
-- Manual PDF encoding do base64
-- Manual headers (`x-api-key`, `anthropic-version`)
-- Body JSON:
-  ```json
-  {
-    "model": "claude-3-7-sonnet-20250219",
-    "max_tokens": 8192,
-    "messages": [{
-      "role": "user",
-      "content": [
-        {
-          "type": "document",
-          "source": {
-            "type": "base64",
-            "media_type": "application/pdf",
-            "data": "={{ $json.attachments[0].data.toString('base64') }}"
-          }
-        },
-        {
-          "type": "text",
-          "text": "[prompt]"
-        }
-      ]
-    }]
-  }
-  ```
+**n8n (ta wersja workflow):**
+- GPT-4o (OpenAI)
+- Natywny node `n8n-nodes-base.openAi`
+- Bardzo dobra obsługa PDF i dokumentów
+- Response format: `json_object` dla strukturalnych danych
+
+**Dlaczego GPT-4o zamiast Claude:**
+- GPT-4o ma lepszą obsługę multimodalnych inputów (PDF)
+- Natywny node w n8n 1.119.2 (łatwiejsza konfiguracja)
+- Podobna (czasem lepsza) dokładność dla faktur
+- Wsparcie dla wymuszania formatu JSON
+- Niższe koszty niż Claude 3.5 Sonnet
+
+**Alternatywa - Claude:**
+Jeśli n8n ma node "Anthropic" (sprawdź w UI):
+- Zamień node "OpenAI - Skanowanie FV" na "Anthropic"
+- Model: claude-3-5-sonnet-20241022
+- Konfiguracja credentials: Anthropic API Key
 
 ### 5. Routing Logic
 
@@ -110,7 +100,7 @@ Ten dokument opisuje różnice między oryginalnym workflow Make.com a nową wer
 - Każdy IF ma True/False paths
 - Można łączyć IF nodes do stworzenia złożonej logiki
 
-### 6. Data Flow
+### 5. Data Flow
 
 **Make.com:**
 - Bundle-based (każdy moduł przetwarza wszystkie bundles)

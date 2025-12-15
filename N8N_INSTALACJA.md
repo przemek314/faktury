@@ -53,37 +53,40 @@ Password: [hasło]
 SSL: Tak
 ```
 
-#### 2.2. Anthropic Claude API
+#### 2.2. OpenAI API (główny silnik AI)
 ```
-Typ: HTTP Header Auth
-Nazwa: Anthropic API Key
-Header: x-api-key
-Value: [twój klucz API Anthropic]
-```
-
-#### 2.3. OpenAI API
-```
-Typ: HTTP Header Auth
-Nazwa: OpenAI API Key
-Header: Authorization
-Value: Bearer [twój klucz API OpenAI]
+Typ: OpenAI
+Nazwa: OpenAI API
+API Key: [twój klucz API OpenAI]
 ```
 
-#### 2.4. Airtable
+**Uwaga**: Workflow używa GPT-4o do ekstrakcji danych z faktur. GPT-4o ma:
+- Lepszą obsługę PDF i dokumentów niż GPT-4
+- Natywny node w n8n (łatwiejsza konfiguracja)
+- Bardzo dobrą dokładność dla danych strukturalnych
+- Wsparcie dla `json_object` response format
+
+**Alternatywnie - Claude**: Jeśli wolisz używać Claude (jak w Make.com):
+1. Sprawdź w n8n UI czy masz dostępny node "Anthropic"
+2. Jeśli tak - zamień node "OpenAI - Skanowanie FV" na "Anthropic"
+3. Model: claude-3-5-sonnet-20241022 lub claude-3-7-sonnet-20250219
+4. Credentials: Anthropic API Key
+
+#### 2.3. Airtable
 ```
 Typ: Airtable API
 Nazwa: Airtable API
 API Key: [twój klucz API Airtable]
 ```
 
-#### 2.5. Google Drive
+#### 2.4. Google Drive
 ```
 Typ: Google Drive OAuth2
 Nazwa: Google Drive
 [Postępuj zgodnie z instrukcjami n8n do konfiguracji OAuth2]
 ```
 
-#### 2.6. Slack
+#### 2.5. Slack
 ```
 Typ: Slack API lub Slack OAuth2
 Nazwa: Slack
@@ -127,11 +130,11 @@ W node "Airtable - Utwórz rekord" sprawdź czy nazwy kolumn pasują do twojej b
 ### Główne kroki:
 
 1. **Email Trigger** - monitoruje INBOX co minutę
-2. **Delay 5s** - opóźnienie dla stabilności
-3. **Filtr PDF** - przepuszcza tylko emaile z załącznikami PDF
-4. **Claude AI** - ekstrakcja danych z faktury (z retry 3x)
-5. **Parse JSON** - przetworzenie odpowiedzi Claude
-   - **Error Handler**: OpenAI GPT naprawia błędny JSON
+2. **Filtr PDF** - przepuszcza tylko emaile z załącznikami PDF
+3. **Delay 5s** - opóźnienie dla stabilności
+4. **OpenAI GPT-4o** - ekstrakcja danych z faktury (z retry 3x)
+5. **Parse JSON** - przetworzenie odpowiedzi OpenAI
+   - **Error Handler**: OpenAI GPT-4 naprawia błędny JSON (z json_object format)
 6. **Check Invoice** - sprawdza czy to faktuar czy spam
 7. **Airtable Search** - szuka duplikatów
 8. **Router** - podział na 2 ścieżki:
@@ -197,8 +200,8 @@ Workflow zawiera następujące mechanizmy obsługi błędów:
 ## Optymalizacja
 
 ### Redukcja kosztów AI:
-- Claude API: ~$0.01-0.03 za fakturę
-- OpenAI (tylko w razie błędu): ~$0.02 za naprawę
+- GPT-4o: ~$0.01-0.02 za fakturę (główna ekstrakcja)
+- GPT-4: ~$0.02-0.03 (tylko w razie błędu parsowania)
 
 ### Zwiększenie wydajności:
 - Zmień polling z 1 minuty na dłuższy interwał jeśli nie potrzebujesz real-time

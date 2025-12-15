@@ -1,5 +1,5 @@
 {
-  "name": "Automatyzacja Faktur - n8n",
+  "name": "Automatyzacja Faktur - n8n (Natywne Node'y)",
   "nodes": [
     {
       "parameters": {
@@ -11,8 +11,7 @@
           ]
         },
         "options": {
-          "allowUnauthorizedCerts": false,
-          "forceReconnect": 1
+          "allowUnauthorizedCerts": false
         },
         "mailbox": "INBOX",
         "postProcessAction": "read",
@@ -25,35 +24,14 @@
         240,
         300
       ],
-      "id": "node-1",
-      "credentials": {
-        "imap": {
-          "id": "1",
-          "name": "faktury@dotykowewlaczniki.pl"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "amount": 5,
-        "unit": "seconds"
-      },
-      "name": "Opóźnienie 5s",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [
-        460,
-        300
-      ],
-      "id": "node-2",
-      "webhookId": "wait-webhook-id"
+      "id": "e8c5d952-3a1f-4c8e-b5f1-8d0a7c3e9f12"
     },
     {
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{ $json.attachments[0].contentType }}",
+              "value1": "={{ $json.attachments?.[0]?.contentType }}",
               "operation": "contains",
               "value2": "pdf"
             }
@@ -62,99 +40,107 @@
       },
       "name": "Filtr - Tylko PDF",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "id": "a1b2c3d4-5e6f-7g8h-9i0j-k1l2m3n4o5p6"
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "name": "Opóźnienie",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
       "position": [
         680,
         300
       ],
-      "id": "node-3"
+      "id": "wait-node-id",
+      "webhookId": "{{ $workflow.id }}"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "resource": "text",
+        "operation": "message",
+        "modelId": "gpt-4o",
+        "messages": {
+          "values": [
             {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
+              "role": "user",
+              "content": "={{ 'Instrukcja ekstrakcji danych z faktur\nNa podstawie dostarczonego tekstu faktury, znajdź i wyodrębnij następujące informacje. Zwróć TYLKO obiekt JSON, bez żadnych dodatkowych komentarzy, oznaczeń formatowania czy znaczników kodu.\n\nNajpierw sprawdź czy to jest faktura szukając wskaźników:\n\nA. Bezpośrednie wskazania faktury:\n- Słowa kluczowe: \"faktura\", \"FV\", \"VAT\", \"rachunek\", \"należność\", \"dokument księgowy\", \"invoice\", \"invoiced\", \"billing\"\n- Numery faktur (np. FV/2024/123, VAT/2024/01)\n- Frazy \"w załączeniu faktura\", \"przesyłam fakturę\", \"załączam FV\"\n\nB. Pośrednie wskazania faktury:\n- Kwoty z określeniem \"netto\" lub \"brutto\"\n- Kwoty poprzedzone znakiem waluty ($, €, £)\n- Terminy płatności (np. \"termin płatności\", \"płatne do\")\n- Numery kont bankowych\n- Dane do przelewu\n- \"Do zapłaty\"\n- \"Proszę o zapłatę\"\n- \"Proforma\"\n- \"Nota księgowa\"\n- \"Rozliczenie\"\n- Frazy potwierdzające wystawienie dokumentu księgowego:\n * \"invoiced amount\"\n * \"payment received\"\n * \"payment confirmation\"\n- Daty transakcji/płatności w kontekście kwot\n- Informacje o metodzie płatności (np. \"payment method\", \"card ending with\")\n\nJeśli to nie jest faktura (brak powyższych wskaźników), zwróć obiekt JSON z wartością \"NOT_INVOICE\" w polu invoice_number i null w pozostałych polach.\n\nJeśli to jest faktura, wyodrębnij następujące informacje:\n\nNumer faktury (invoice_number)\nSzukaj: \"FV\", \"Faktura VAT\", \"Invoice no.\", \"Invoice number\"\nFormaty: FV/2024/01/123, INV-2024-001, 2024/ABC/123\n\nDane dostawcy (supplier)\nSzukaj: \"Sprzedawca\", \"Wystawca\", \"Supplier\", \"Seller\"\nTylko nazwa firmy, bez adresu\n\nData wystawienia (issue_date)\nSzukaj: \"Data wystawienia\", \"Issue date\", \"Invoice date\"\nFormat wyjściowy: YYYY-MM-DD\n\nData sprzedaży (sale date)\nSzukaj: \"Data sprzedaży\"\nFormat wyjściowy: YYYY-MM-DD\n\nNIP sprzedawcy (seller's ID)\nSzukaj w danych adresowych sprzedawcy \"NIP\"\nFormat wyjściowy: dziesięcio liczbowy kod + może być poprzedzony przedrostkiem Kraju np. PL lub z myślnikami\n\n\nKwota netto (net_amount)\nSzukaj: \"Wartość netto\", \"Net amount\", \"Subtotal\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nKwota brutto (gross_amount)\nSzukaj: \"Wartość brutto\", \"Gross amount\", \"Total\", \"Do zapłaty\", \"Total due\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\n\nKwota VAT (vat amount)\nSzukaj: \"Wartość VAT\",\"Kwota VAT\" \"vat amount\", \"Total \",\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nZasady przetwarzania:\n- Dla nieznalezionych danych użyj null\n- Nie zgaduj brakujących danych\n- Przy wielu wartościach wybierz najbardziej prawdopodobną\n- Ignoruj przykładowe i przekreślone dane\n\nFormat odpowiedzi:\nZWRÓĆ TYLKO PONIŻSZY OBIEKT JSON, BEZ ŻADNYCH DODATKOWYCH ZNACZNIKÓW CZY KOMENTARZY:\n{\n\"invoice_number\": \"string or NOT_INVOICE or null\",\n\"supplier\": \"string or null\",\n\"issue_date\": \"YYYY-MM-DD or null\",\n\"sale date\": \"YYYY-MM-DD or null\",\n\"seller's ID\": number or null\n\"net_amount\": number or null,\n\"gross_amount\": number or null\n\"vat amount\":number or null\n}\nNiektóre faktury będą w innej walucie niż PLN. Np. \n*CZK, EUR,USD, HUF\n\nJeśli jest taka faktura to zastosuj przelicznik na PLN (polski złoty) z ostatniego dnia kursu.\n​\\n\\nPDF w załączniku.' }}"
             }
           ]
         },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": []
-        },
-        "jsonParameters": true,
-        "body": "{\"model\": \"claude-3-7-sonnet-20250219\", \"max_tokens\": 8192, \"temperature\": 1, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"document\", \"source\": {\"type\": \"base64\", \"media_type\": \"application/pdf\", \"data\": \"={{ $json.attachments[0].data.toString('base64') }}\"}}, {\"type\": \"text\", \"text\": \"Instrukcja ekstrakcji danych z faktur\\nNa podstawie dostarczonego tekstu faktury, znajd\\u017a i wyodr\\u0119bnij nast\\u0119puj\\u0105ce informacje. Zwr\\u00f3\\u0107 TYLKO obiekt JSON, bez \\u017cadnych dodatkowych komentarzy, oznacze\\u0144 formatowania czy znacznik\\u00f3w kodu.\\n\\nNajpierw sprawd\\u017a czy to jest faktura szukaj\\u0105c wska\\u017anik\\u00f3w:\\n\\nA. Bezpo\\u015brednie wskazania faktury:\\n- S\\u0142owa kluczowe: \\\"faktura\\\", \\\"FV\\\", \\\"VAT\\\", \\\"rachunek\\\", \\\"nale\\u017cno\\u015b\\u0107\\\", \\\"dokument ksi\\u0119gowy\\\", \\\"invoice\\\", \\\"invoiced\\\", \\\"billing\\\"\\n- Numery faktur (np. FV/2024/123, VAT/2024/01)\\n- Frazy \\\"w za\\u0142\\u0105czeniu faktura\\\", \\\"przesy\\u0142am faktur\\u0119\\\", \\\"za\\u0142\\u0105czam FV\\\"\\n\\nB. Po\\u015brednie wskazania faktury:\\n- Kwoty z okre\\u015bleniem \\\"netto\\\" lub \\\"brutto\\\"\\n- Kwoty poprzedzone znakiem waluty ($, \\u20ac, \\u00a3)\\n- Terminy p\\u0142atno\\u015bci (np. \\\"termin p\\u0142atno\\u015bci\\\", \\\"p\\u0142atne do\\\")\\n- Numery kont bankowych\\n- Dane do przelewu\\n- \\\"Do zap\\u0142aty\\\"\\n- \\\"Prosz\\u0119 o zap\\u0142at\\u0119\\\"\\n- \\\"Proforma\\\"\\n- \\\"Nota ksi\\u0119gowa\\\"\\n- \\\"Rozliczenie\\\"\\n- Frazy potwierdzaj\\u0105ce wystawienie dokumentu ksi\\u0119gowego:\\n * \\\"invoiced amount\\\"\\n * \\\"payment received\\\"\\n * \\\"payment confirmation\\\"\\n- Daty transakcji/p\\u0142atno\\u015bci w kontek\\u015bcie kwot\\n- Informacje o metodzie p\\u0142atno\\u015bci (np. \\\"payment method\\\", \\\"card ending with\\\")\\n\\nJe\\u015bli to nie jest faktura (brak powy\\u017cszych wska\\u017anik\\u00f3w), zwr\\u00f3\\u0107 obiekt JSON z warto\\u015bci\\u0105 \\\"NOT_INVOICE\\\" w polu invoice_number i null w pozosta\\u0142ych polach.\\n\\nJe\\u015bli to jest faktura, wyodr\\u0119bnij nast\\u0119puj\\u0105ce informacje:\\n\\nNumer faktury (invoice_number)\\nSzukaj: \\\"FV\\\", \\\"Faktura VAT\\\", \\\"Invoice no.\\\", \\\"Invoice number\\\"\\nFormaty: FV/2024/01/123, INV-2024-001, 2024/ABC/123\\n\\nDane dostawcy (supplier)\\nSzukaj: \\\"Sprzedawca\\\", \\\"Wystawca\\\", \\\"Supplier\\\", \\\"Seller\\\"\\nTylko nazwa firmy, bez adresu\\n\\nData wystawienia (issue_date)\\nSzukaj: \\\"Data wystawienia\\\", \\\"Issue date\\\", \\\"Invoice date\\\"\\nFormat wyj\\u015bciowy: YYYY-MM-DD\\n\\nData sprzeda\\u017cy (sale date)\\nSzukaj: \\\"Data sprzeda\\u017cy\\\"\\nFormat wyj\\u015bciowy: YYYY-MM-DD\\n\\nNIP sprzedawcy (seller's ID)\\nSzukaj w danych adresowych sprzedawcy \\\"NIP\\\"\\nFormat wyj\\u015bciowy: dziesi\\u0119cio liczbowy kod + mo\\u017ce by\\u0107 poprzedzony przedrostkiem Kraju np. PL lub z my\\u015blnikami\\n\\n\\nKwota netto (net_amount)\\nSzukaj: \\\"Warto\\u015b\\u0107 netto\\\", \\\"Net amount\\\", \\\"Subtotal\\\"\\nLiczba z kropk\\u0105, 2 miejsca po przecinku\\nBez waluty\\n\\nKwota brutto (gross_amount)\\nSzukaj: \\\"Warto\\u015b\\u0107 brutto\\\", \\\"Gross amount\\\", \\\"Total\\\", \\\"Do zap\\u0142aty\\\", \\\"Total due\\\"\\nLiczba z kropk\\u0105, 2 miejsca po przecinku\\nBez waluty\\n\\n\\nKwota VAT (vat amount)\\nSzukaj: \\\"Warto\\u015b\\u0107 VAT\\\",\\\"Kwota VAT\\\" \\\"vat amount\\\", \\\"Total \\\",\\nLiczba z kropk\\u0105, 2 miejsca po przecinku\\nBez waluty\\n\\nZasady przetwarzania:\\n- Dla nieznalezionych danych u\\u017cyj null\\n- Nie zgaduj brakuj\\u0105cych danych\\n- Przy wielu warto\\u015bciach wybierz najbardziej prawdopodobn\\u0105\\n- Ignoruj przyk\\u0142adowe i przekre\\u015blone dane\\n\\nFormat odpowiedzi:\\nZWR\\u00d3\\u0106 TYLKO PONI\\u017bSZY OBIEKT JSON, BEZ \\u017bADNYCH DODATKOWYCH ZNACZNIK\\u00d3W CZY KOMENTARZY:\\n{\\n\\\"invoice_number\\\": \\\"string or NOT_INVOICE or null\\\",\\n\\\"supplier\\\": \\\"string or null\\\",\\n\\\"issue_date\\\": \\\"YYYY-MM-DD or null\\\",\\n\\\"sale date\\\": \\\"YYYY-MM-DD or null\\\",\\n\\\"seller's ID\\\": number or null\\n\\\"net_amount\\\": number or null,\\n\\\"gross_amount\\\": number or null\\n\\\"vat amount\\\":number or null\\n}\\nNiekt\\u00f3re faktury b\\u0119d\\u0105 w innej walucie ni\\u017c PLN. Np. \\n*CZK, EUR,USD, HUF\\n\\nJe\\u015bli jest taka faktura to zastosuj przelicznik na PLN (polski z\\u0142oty) z ostatniego dnia kursu.\\n\\u200b\"}]}]}",
         "options": {
-          "retry": {
-            "enabled": true,
-            "maxTries": 3,
-            "waitBetweenTries": 70000
-          }
-        }
+          "maxTokens": 4000,
+          "temperature": 0.3
+        },
+        "text": "Instrukcja ekstrakcji danych z faktur\nNa podstawie dostarczonego tekstu faktury, znajdź i wyodrębnij następujące informacje. Zwróć TYLKO obiekt JSON, bez żadnych dodatkowych komentarzy, oznaczeń formatowania czy znaczników kodu.\n\nNajpierw sprawdź czy to jest faktura szukając wskaźników:\n\nA. Bezpośrednie wskazania faktury:\n- Słowa kluczowe: \"faktura\", \"FV\", \"VAT\", \"rachunek\", \"należność\", \"dokument księgowy\", \"invoice\", \"invoiced\", \"billing\"\n- Numery faktur (np. FV/2024/123, VAT/2024/01)\n- Frazy \"w załączeniu faktura\", \"przesyłam fakturę\", \"załączam FV\"\n\nB. Pośrednie wskazania faktury:\n- Kwoty z określeniem \"netto\" lub \"brutto\"\n- Kwoty poprzedzone znakiem waluty ($, €, £)\n- Terminy płatności (np. \"termin płatności\", \"płatne do\")\n- Numery kont bankowych\n- Dane do przelewu\n- \"Do zapłaty\"\n- \"Proszę o zapłatę\"\n- \"Proforma\"\n- \"Nota księgowa\"\n- \"Rozliczenie\"\n- Frazy potwierdzające wystawienie dokumentu księgowego:\n * \"invoiced amount\"\n * \"payment received\"\n * \"payment confirmation\"\n- Daty transakcji/płatności w kontekście kwot\n- Informacje o metodzie płatności (np. \"payment method\", \"card ending with\")\n\nJeśli to nie jest faktura (brak powyższych wskaźników), zwróć obiekt JSON z wartością \"NOT_INVOICE\" w polu invoice_number i null w pozostałych polach.\n\nJeśli to jest faktura, wyodrębnij następujące informacje:\n\nNumer faktury (invoice_number)\nSzukaj: \"FV\", \"Faktura VAT\", \"Invoice no.\", \"Invoice number\"\nFormaty: FV/2024/01/123, INV-2024-001, 2024/ABC/123\n\nDane dostawcy (supplier)\nSzukaj: \"Sprzedawca\", \"Wystawca\", \"Supplier\", \"Seller\"\nTylko nazwa firmy, bez adresu\n\nData wystawienia (issue_date)\nSzukaj: \"Data wystawienia\", \"Issue date\", \"Invoice date\"\nFormat wyjściowy: YYYY-MM-DD\n\nData sprzedaży (sale date)\nSzukaj: \"Data sprzedaży\"\nFormat wyjściowy: YYYY-MM-DD\n\nNIP sprzedawcy (seller's ID)\nSzukaj w danych adresowych sprzedawcy \"NIP\"\nFormat wyjściowy: dziesięcio liczbowy kod + może być poprzedzony przedrostkiem Kraju np. PL lub z myślnikami\n\n\nKwota netto (net_amount)\nSzukaj: \"Wartość netto\", \"Net amount\", \"Subtotal\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nKwota brutto (gross_amount)\nSzukaj: \"Wartość brutto\", \"Gross amount\", \"Total\", \"Do zapłaty\", \"Total due\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\n\nKwota VAT (vat amount)\nSzukaj: \"Wartość VAT\",\"Kwota VAT\" \"vat amount\", \"Total \",\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nZasady przetwarzania:\n- Dla nieznalezionych danych użyj null\n- Nie zgaduj brakujących danych\n- Przy wielu wartościach wybierz najbardziej prawdopodobną\n- Ignoruj przykładowe i przekreślone dane\n\nFormat odpowiedzi:\nZWRÓĆ TYLKO PONIŻSZY OBIEKT JSON, BEZ ŻADNYCH DODATKOWYCH ZNACZNIKÓW CZY KOMENTARZY:\n{\n\"invoice_number\": \"string or NOT_INVOICE or null\",\n\"supplier\": \"string or null\",\n\"issue_date\": \"YYYY-MM-DD or null\",\n\"sale date\": \"YYYY-MM-DD or null\",\n\"seller's ID\": number or null\n\"net_amount\": number or null,\n\"gross_amount\": number or null\n\"vat amount\":number or null\n}\nNiektóre faktury będą w innej walucie niż PLN. Np. \n*CZK, EUR,USD, HUF\n\nJeśli jest taka faktura to zastosuj przelicznik na PLN (polski złoty) z ostatniego dnia kursu.\n​"
       },
-      "name": "Claude AI - Skanowanie FV",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
+      "name": "OpenAI - Skanowanie FV",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.3,
       "position": [
         900,
         300
       ],
-      "id": "node-4",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "2",
-          "name": "Anthropic API Key"
-        }
-      }
+      "id": "openai-scan-node",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "jsCode": "// Wyodrębnij tekst z odpowiedzi Claude\nconst response = $input.item.json;\nconst textContent = response.content.find(c => c.type === 'text')?.text || '';\n\n// Spróbuj sparsować JSON\ntry {\n  const invoiceData = JSON.parse(textContent);\n  return { json: invoiceData };\n} catch (error) {\n  // Jeśli parsowanie nie powiodło się, przekaż błąd\n  throw new Error('Failed to parse Claude response: ' + error.message);\n}"
+        "jsCode": "// Parse OpenAI response\nconst response = $input.item.json;\nlet textContent = '';\n\n// Różne formaty odpowiedzi OpenAI\nif (response.choices?.[0]?.message?.content) {\n  textContent = response.choices[0].message.content;\n} else if (response.message?.content) {\n  textContent = response.message.content;\n} else if (response.text) {\n  textContent = response.text;\n} else {\n  throw new Error('Nie można wyodrębnić odpowiedzi z OpenAI');\n}\n\n// Usuń markdown code blocks\ntextContent = textContent\n  .replace(/```json\\n?/g, '')\n  .replace(/```\\n?/g, '')\n  .trim();\n\n// Parse JSON\ntry {\n  const invoiceData = JSON.parse(textContent);\n  return { json: invoiceData };\n} catch (error) {\n  // Spróbuj wyciągnąć JSON z tekstu\n  const jsonMatch = textContent.match(/\\{[^}]+\\}/s);\n  if (jsonMatch) {\n    return { json: JSON.parse(jsonMatch[0]) };\n  }\n  throw new Error('Nie można sparsować JSON: ' + error.message);\n}"
       },
-      "name": "Parse Claude Response",
+      "name": "Parse JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1120,
         300
       ],
-      "id": "node-5"
+      "id": "parse-json-node",
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "jsonParameters": true,
-        "body": "{\"model\": \"gpt-4\", \"messages\": [{\"role\": \"system\", \"content\": \"You are a JSON repair assistant. Fix any malformed JSON and return only valid JSON.\"}, {\"role\": \"user\", \"content\": \"={{ $('Claude AI - Skanowanie FV').item.json.content[0].text }}\"}], \"response_format\": {\"type\": \"json_object\"}}"
+        "resource": "text",
+        "operation": "message",
+        "modelId": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a JSON repair and extraction assistant. Extract invoice data and return ONLY valid JSON."
+            },
+            {
+              "role": "user",
+              "content": "={{ 'Instrukcja ekstrakcji danych z faktur\nNa podstawie dostarczonego tekstu faktury, znajdź i wyodrębnij następujące informacje. Zwróć TYLKO obiekt JSON, bez żadnych dodatkowych komentarzy, oznaczeń formatowania czy znaczników kodu.\n\nNajpierw sprawdź czy to jest faktura szukając wskaźników:\n\nA. Bezpośrednie wskazania faktury:\n- Słowa kluczowe: \"faktura\", \"FV\", \"VAT\", \"rachunek\", \"należność\", \"dokument księgowy\", \"invoice\", \"invoiced\", \"billing\"\n- Numery faktur (np. FV/2024/123, VAT/2024/01)\n- Frazy \"w załączeniu faktura\", \"przesyłam fakturę\", \"załączam FV\"\n\nB. Pośrednie wskazania faktury:\n- Kwoty z określeniem \"netto\" lub \"brutto\"\n- Kwoty poprzedzone znakiem waluty ($, €, £)\n- Terminy płatności (np. \"termin płatności\", \"płatne do\")\n- Numery kont bankowych\n- Dane do przelewu\n- \"Do zapłaty\"\n- \"Proszę o zapłatę\"\n- \"Proforma\"\n- \"Nota księgowa\"\n- \"Rozliczenie\"\n- Frazy potwierdzające wystawienie dokumentu księgowego:\n * \"invoiced amount\"\n * \"payment received\"\n * \"payment confirmation\"\n- Daty transakcji/płatności w kontekście kwot\n- Informacje o metodzie płatności (np. \"payment method\", \"card ending with\")\n\nJeśli to nie jest faktura (brak powyższych wskaźników), zwróć obiekt JSON z wartością \"NOT_INVOICE\" w polu invoice_number i null w pozostałych polach.\n\nJeśli to jest faktura, wyodrębnij następujące informacje:\n\nNumer faktury (invoice_number)\nSzukaj: \"FV\", \"Faktura VAT\", \"Invoice no.\", \"Invoice number\"\nFormaty: FV/2024/01/123, INV-2024-001, 2024/ABC/123\n\nDane dostawcy (supplier)\nSzukaj: \"Sprzedawca\", \"Wystawca\", \"Supplier\", \"Seller\"\nTylko nazwa firmy, bez adresu\n\nData wystawienia (issue_date)\nSzukaj: \"Data wystawienia\", \"Issue date\", \"Invoice date\"\nFormat wyjściowy: YYYY-MM-DD\n\nData sprzedaży (sale date)\nSzukaj: \"Data sprzedaży\"\nFormat wyjściowy: YYYY-MM-DD\n\nNIP sprzedawcy (seller's ID)\nSzukaj w danych adresowych sprzedawcy \"NIP\"\nFormat wyjściowy: dziesięcio liczbowy kod + może być poprzedzony przedrostkiem Kraju np. PL lub z myślnikami\n\n\nKwota netto (net_amount)\nSzukaj: \"Wartość netto\", \"Net amount\", \"Subtotal\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nKwota brutto (gross_amount)\nSzukaj: \"Wartość brutto\", \"Gross amount\", \"Total\", \"Do zapłaty\", \"Total due\"\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\n\nKwota VAT (vat amount)\nSzukaj: \"Wartość VAT\",\"Kwota VAT\" \"vat amount\", \"Total \",\nLiczba z kropką, 2 miejsca po przecinku\nBez waluty\n\nZasady przetwarzania:\n- Dla nieznalezionych danych użyj null\n- Nie zgaduj brakujących danych\n- Przy wielu wartościach wybierz najbardziej prawdopodobną\n- Ignoruj przykładowe i przekreślone dane\n\nFormat odpowiedzi:\nZWRÓĆ TYLKO PONIŻSZY OBIEKT JSON, BEZ ŻADNYCH DODATKOWYCH ZNACZNIKÓW CZY KOMENTARZY:\n{\n\"invoice_number\": \"string or NOT_INVOICE or null\",\n\"supplier\": \"string or null\",\n\"issue_date\": \"YYYY-MM-DD or null\",\n\"sale date\": \"YYYY-MM-DD or null\",\n\"seller's ID\": number or null\n\"net_amount\": number or null,\n\"gross_amount\": number or null\n\"vat amount\":number or null\n}\nNiektóre faktury będą w innej walucie niż PLN. Np. \n*CZK, EUR,USD, HUF\n\nJeśli jest taka faktura to zastosuj przelicznik na PLN (polski złoty) z ostatniego dnia kursu.\n​' }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 2000
+        }
       },
-      "name": "OpenAI - Naprawa JSON",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
+      "name": "OpenAI - Naprawa",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.3,
       "position": [
         1120,
         480
       ],
-      "id": "node-6",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "3",
-          "name": "OpenAI API Key"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "id": "openai-fix-node"
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.item.json;\nconst fixedJson = response.choices[0].message.content;\nreturn { json: JSON.parse(fixedJson) };"
+        "jsCode": "const response = $input.item.json;\nlet textContent = response.choices?.[0]?.message?.content || response.message?.content || response.text || '';\ntextContent = textContent.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nreturn { json: JSON.parse(textContent) };"
       },
       "name": "Parse Fixed JSON",
       "type": "n8n-nodes-base.code",
@@ -163,7 +149,7 @@
         1340,
         480
       ],
-      "id": "node-7"
+      "id": "parse-fixed-node"
     },
     {
       "parameters": {
@@ -176,7 +162,7 @@
         1560,
         300
       ],
-      "id": "node-8"
+      "id": "merge-node"
     },
     {
       "parameters": {
@@ -192,15 +178,16 @@
       },
       "name": "Czy to faktura?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
         1780,
         300
       ],
-      "id": "node-9"
+      "id": "check-invoice-node"
     },
     {
       "parameters": {
+        "operation": "search",
         "application": "appbLQjOUm58ckRwu",
         "table": "tbl2jnB2TinJgSh6b",
         "options": {
@@ -214,60 +201,54 @@
         2000,
         300
       ],
-      "id": "node-10",
-      "credentials": {
-        "airtableApi": {
-          "id": "4",
-          "name": "Airtable API"
-        }
-      }
+      "id": "airtable-search-node"
     },
     {
       "parameters": {
-        "conditions": {
-          "number": [
-            {
-              "value1": "={{ $json.length }}",
-              "operation": "equal",
-              "value2": 0
-            }
-          ]
-        }
+        "jsCode": "const items = $input.all();\nconst isDuplicate = items.length > 0;\nreturn { json: { isDuplicate, count: items.length } };"
       },
-      "name": "Router - Duplikat?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "name": "Sprawdź duplikat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         2220,
         300
       ],
-      "id": "node-11"
+      "id": "check-dup-node"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isDuplicate }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "name": "Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        300
+      ],
+      "id": "router-node"
     },
     {
       "parameters": {
         "operation": "search",
-        "driveId": {
-          "__rl": true,
-          "value": "My Drive",
-          "mode": "list"
-        },
-        "name": "={{ $now.format('yyyy-MM') }}",
         "queryString": "=mimeType='application/vnd.google-apps.folder' and name='{{ $now.format('yyyy-MM') }}' and trashed=false"
       },
-      "name": "GDrive - Sprawdź folder",
+      "name": "GDrive - Szukaj folderu",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        2440,
+        2660,
         200
       ],
-      "id": "node-12",
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "5",
-          "name": "Google Drive"
-        }
-      }
+      "id": "gdrive-search-node"
     },
     {
       "parameters": {
@@ -281,37 +262,34 @@
           ]
         }
       },
-      "name": "Folder istnieje?",
+      "name": "Folder nie istnieje?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
-        2660,
+        2880,
         200
       ],
-      "id": "node-13"
+      "id": "check-folder-node"
     },
     {
       "parameters": {
         "operation": "create",
         "name": "={{ $now.format('yyyy-MM') }}",
         "options": {
-          "mimeType": "application/vnd.google-apps.folder"
+          "folderToCreateIn": {
+            "mode": "list",
+            "value": "root"
+          }
         }
       },
       "name": "GDrive - Utwórz folder",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        2660,
+        2880,
         100
       ],
-      "id": "node-14",
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "5",
-          "name": "Google Drive"
-        }
-      }
+      "id": "gdrive-create-node"
     },
     {
       "parameters": {
@@ -321,66 +299,55 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 2.1,
       "position": [
-        2880,
+        3100,
         200
       ],
-      "id": "node-15"
+      "id": "merge-folder-node"
     },
     {
       "parameters": {
         "operation": "upload",
-        "name": "={{ $('Parse Claude Response').item.json.invoice_number }}_{{ $('Parse Claude Response').item.json.supplier }}.pdf",
-        "resolveData": true,
+        "name": "={{ $('Merge').item.json.invoice_number }}_{{ $('Merge').item.json.supplier }}.pdf",
+        "binaryData": true,
+        "binaryPropertyName": "data",
         "options": {
           "parents": [
-            "={{ $json.id || $json.files[0].id }}"
-          ]
-        },
-        "binaryData": true,
-        "binaryPropertyName": "={{ $('Email Trigger - Faktury').item.json.attachments[0].fileName }}"
-      },
-      "name": "GDrive - Upload FV",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        3100,
-        200
-      ],
-      "id": "node-16",
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "5",
-          "name": "Google Drive"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "share",
-        "fileId": "={{ $json.id }}",
-        "permissions": {
-          "permission": [
-            {
-              "role": "reader",
-              "type": "anyone"
-            }
+            "={{ $json.id || $json.files?.[0]?.id }}"
           ]
         }
       },
-      "name": "GDrive - Udostępnij",
+      "name": "GDrive - Upload",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
         3320,
         200
       ],
-      "id": "node-17",
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "5",
-          "name": "Google Drive"
+      "id": "gdrive-upload-node"
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": "={{ $json.id }}",
+        "permissions": {
+          "permissionsUi": {
+            "permissionsValues": [
+              {
+                "role": "reader",
+                "type": "anyone"
+              }
+            ]
+          }
         }
-      }
+      },
+      "name": "GDrive - Udostępnij",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3540,
+        200
+      ],
+      "id": "gdrive-share-node"
     },
     {
       "parameters": {
@@ -390,100 +357,70 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Numer FV": "={{ $('Parse Claude Response').item.json.invoice_number }}",
-            "Dostawca": "={{ $('Parse Claude Response').item.json.supplier }}",
-            "Data wystawienia": "={{ $('Parse Claude Response').item.json.issue_date }}",
-            "Data sprzedaży": "={{ $('Parse Claude Response').item.json['sale date'] }}",
-            "NIP": "={{ $('Parse Claude Response').item.json['seller\\'s ID'] }}",
-            "Netto": "={{ $('Parse Claude Response').item.json.net_amount }}",
-            "Brutto": "={{ $('Parse Claude Response').item.json.gross_amount }}",
-            "VAT": "={{ $('Parse Claude Response').item.json['vat amount'] }}",
+            "Numer FV": "={{ $('Merge').item.json.invoice_number }}",
+            "Dostawca": "={{ $('Merge').item.json.supplier }}",
+            "Data wystawienia": "={{ $('Merge').item.json.issue_date }}",
+            "Data sprzedaży": "={{ $('Merge').item.json['sale date'] }}",
+            "NIP": "={{ $('Merge').item.json[\"seller's ID\"] }}",
+            "Netto": "={{ $('Merge').item.json.net_amount }}",
+            "Brutto": "={{ $('Merge').item.json.gross_amount }}",
+            "VAT": "={{ $('Merge').item.json['vat amount'] }}",
             "Link do pliku": "={{ $('GDrive - Udostępnij').item.json.webViewLink }}"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
+          }
+        }
       },
-      "name": "Airtable - Utwórz rekord",
+      "name": "Airtable - Zapisz",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2,
-      "position": [
-        3540,
-        200
-      ],
-      "id": "node-18",
-      "credentials": {
-        "airtableApi": {
-          "id": "4",
-          "name": "Airtable API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "channelId": {
-          "__rl": true,
-          "value": "faktury",
-          "mode": "name"
-        },
-        "text": "=:white_check_mark: **Nowa faktura zarejestrowana**\\n\\n*Numer:* {{ $('Parse Claude Response').item.json.invoice_number }}\\n*Dostawca:* {{ $('Parse Claude Response').item.json.supplier }}\\n*Kwota brutto:* {{ $('Parse Claude Response').item.json.gross_amount }} PLN\\n*Data wystawienia:* {{ $('Parse Claude Response').item.json.issue_date }}\\n\\n<{{ $('GDrive - Udostępnij').item.json.webViewLink }}|Zobacz fakturę>",
-        "otherOptions": {}
-      },
-      "name": "Slack - Nowa faktura",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.1,
       "position": [
         3760,
         200
       ],
-      "id": "node-19",
-      "credentials": {
-        "slackApi": {
-          "id": "6",
-          "name": "Slack"
-        }
-      }
+      "id": "airtable-create-node"
     },
     {
       "parameters": {
+        "select": "channel",
         "channelId": {
           "__rl": true,
           "value": "faktury",
           "mode": "name"
         },
-        "text": "=:warning: **Duplikat faktury wykryty**\\n\\n*Numer:* {{ $('Parse Claude Response').item.json.invoice_number }}\\n*Dostawca:* {{ $('Parse Claude Response').item.json.supplier }}\\n\\nTa faktura została już wcześniej zarejestrowana w systemie.",
+        "text": "=:white_check_mark: *Nowa faktura*\n\n*Nr:* {{ $('Merge').item.json.invoice_number }}\n*Dostawca:* {{ $('Merge').item.json.supplier }}\n*Kwota:* {{ $('Merge').item.json.gross_amount }} PLN\n*Data:* {{ $('Merge').item.json.issue_date }}\n\n<{{ $('GDrive - Udostępnij').item.json.webViewLink }}|Zobacz>",
+        "otherOptions": {}
+      },
+      "name": "Slack - Nowa",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        3980,
+        200
+      ],
+      "id": "slack-new-node"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "faktury",
+          "mode": "name"
+        },
+        "text": "=:warning: *Duplikat*\n\n*Nr:* {{ $('Merge').item.json.invoice_number }}\n*Dostawca:* {{ $('Merge').item.json.supplier }}\n\nFaktura już istnieje w systemie.",
         "otherOptions": {}
       },
       "name": "Slack - Duplikat",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.1,
       "position": [
-        2440,
+        2660,
         400
       ],
-      "id": "node-20",
-      "credentials": {
-        "slackApi": {
-          "id": "6",
-          "name": "Slack"
-        }
-      }
+      "id": "slack-dup-node"
     }
   ],
   "connections": {
     "Email Trigger - Faktury": {
-      "main": [
-        [
-          {
-            "node": "Opóźnienie 5s",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Opóźnienie 5s": {
       "main": [
         [
           {
@@ -498,25 +435,36 @@
       "main": [
         [
           {
-            "node": "Claude AI - Skanowanie FV",
+            "node": "Opóźnienie",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude AI - Skanowanie FV": {
+    "Opóźnienie": {
       "main": [
         [
           {
-            "node": "Parse Claude Response",
+            "node": "OpenAI - Skanowanie FV",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Claude Response": {
+    "OpenAI - Skanowanie FV": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
       "main": [
         [
           {
@@ -529,14 +477,14 @@
       "error": [
         [
           {
-            "node": "OpenAI - Naprawa JSON",
+            "node": "OpenAI - Naprawa",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "OpenAI - Naprawa JSON": {
+    "OpenAI - Naprawa": {
       "main": [
         [
           {
@@ -584,18 +532,29 @@
       "main": [
         [
           {
-            "node": "Router - Duplikat?",
+            "node": "Sprawdź duplikat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Router - Duplikat?": {
+    "Sprawdź duplikat": {
       "main": [
         [
           {
-            "node": "GDrive - Sprawdź folder",
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "GDrive - Szukaj folderu",
             "type": "main",
             "index": 0
           }
@@ -609,18 +568,18 @@
         ]
       ]
     },
-    "GDrive - Sprawdź folder": {
+    "GDrive - Szukaj folderu": {
       "main": [
         [
           {
-            "node": "Folder istnieje?",
+            "node": "Folder nie istnieje?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Folder istnieje?": {
+    "Folder nie istnieje?": {
       "main": [
         [
           {
@@ -653,14 +612,14 @@
       "main": [
         [
           {
-            "node": "GDrive - Upload FV",
+            "node": "GDrive - Upload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "GDrive - Upload FV": {
+    "GDrive - Upload": {
       "main": [
         [
           {
@@ -675,18 +634,18 @@
       "main": [
         [
           {
-            "node": "Airtable - Utwórz rekord",
+            "node": "Airtable - Zapisz",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Airtable - Utwórz rekord": {
+    "Airtable - Zapisz": {
       "main": [
         [
           {
-            "node": "Slack - Nowa faktura",
+            "node": "Slack - Nowa",
             "type": "main",
             "index": 0
           }
@@ -699,15 +658,8 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [
-    {
-      "createdAt": "2025-12-15T17:22:33.864772",
-      "updatedAt": "2025-12-15T17:22:33.864782",
-      "id": "1",
-      "name": "faktury"
-    }
-  ],
+  "tags": [],
   "triggerCount": 1,
-  "updatedAt": "2025-12-15T17:22:33.864784",
-  "versionId": "1"
+  "updatedAt": "2025-12-15T17:49:15.756714",
+  "versionId": "3"
 }
